@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mars Explorer — NASA Mission Control</title>
+  <meta name="description" content="Interactive Mars surface explorer integrating NASA rover photos, InSight weather, terrain maps, and mission planning tools to help astronauts plan Marswalks." />
+  <meta name="keywords" content="Mars, NASA, Rover, Explorer, Space, Mission, Curiosity, Perseverance" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS for interactive map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Main CSS -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-content">
+      <div class="loading-logo">
+        <svg viewBox="0 0 100 100" width="80" height="80">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#ff6b35" stroke-width="2" stroke-dasharray="6 4" class="orbit-ring"/>
+          <circle cx="50" cy="50" r="22" fill="#c1440e" />
+          <circle cx="43" cy="40" r="6" fill="#8B2500" opacity="0.8"/>
+          <circle cx="60" cy="55" r="9" fill="#8B2500" opacity="0.6"/>
+          <circle cx="40" cy="58" r="4" fill="#8B2500" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="loading-title">MARS EXPLORER</div>
+      <div class="loading-subtitle">NASA Mission Control</div>
+      <div class="loading-bar-container">
+        <div class="loading-bar" id="loading-bar"></div>
+      </div>
+      <div class="loading-status" id="loading-status">Initializing systems...</div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden">
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <svg viewBox="0 0 60 60" width="36" height="36">
+            <circle cx="30" cy="30" r="24" fill="#c1440e" />
+            <circle cx="24" cy="22" r="4" fill="#8B2500" opacity="0.8"/>
+            <circle cx="36" cy="33" r="6" fill="#8B2500" opacity="0.6"/>
+            <circle cx="22" cy="37" r="3" fill="#8B2500" opacity="0.5"/>
+          </svg>
+          <div>
+            <div class="logo-title">MARS</div>
+            <div class="logo-subtitle">EXPLORER</div>
+          </div>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle Sidebar">☰</button>
+      </div>
+
+      <div class="sidebar-nav">
+        <button class="nav-btn active" data-panel="map" id="nav-map">
+          <span class="nav-icon">🗺️</span>
+          <span class="nav-label">Surface Map</span>
+        </button>
+        <button class="nav-btn" data-panel="weather" id="nav-weather">
+          <span class="nav-icon">🌡️</span>
+          <span class="nav-label">Conditions</span>
+        </button>
+        <button class="nav-btn" data-panel="gallery" id="nav-gallery">
+          <span class="nav-icon">📸</span>
+          <span class="nav-label">Rover Photos</span>
+        </button>
+        <button class="nav-btn" data-panel="mission" id="nav-mission">
+          <span class="nav-icon">🚀</span>
+          <span class="nav-label">Mission Plan</span>
+        </button>
+        <button class="nav-btn" data-panel="apod" id="nav-apod">
+          <span class="nav-icon">🌌</span>
+          <span class="nav-label">Space View</span>
+        </button>
+        <button class="nav-btn" data-panel="telemetry" id="nav-telemetry">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Telemetry</span>
+        </button>
+      </div>
+
+      <div class="sidebar-status">
+        <div class="status-dot online" id="status-dot"></div>
+        <div class="status-info">
+          <span class="status-label">NASA API</span>
+          <span class="status-value" id="api-status">Connected</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="sol-counter">
+            <span class="sol-label">CURRENT SOL</span>
+            <span class="sol-value" id="current-sol">—</span>
+          </div>
+          <div class="topbar-divider"></div>
+          <div class="mars-time">
+            <span class="time-label">MARS LOCAL TIME</span>
+            <span class="time-value" id="mars-time">00:00:00 LST</span>
+          </div>
+        </div>
+        <div class="topbar-center">
+          <div class="mission-title" id="panel-title">SURFACE MAP</div>
+        </div>
+        <div class="topbar-right">
+          <div class="condition-badge" id="condition-badge">
+            <span class="condition-icon">🌡️</span>
+            <span class="condition-temp" id="topbar-temp">—°C</span>
+          </div>
+          <div class="condition-badge">
+            <span class="condition-icon">💨</span>
+            <span class="condition-wind" id="topbar-wind">— m/s</span>
+          </div>
+          <div class="alert-btn" id="alert-btn" title="Hazard Alerts">
+            ⚠️ <span id="alert-count">0</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- PANEL: Map -->
+      <section class="panel active" id="panel-map">
+        <div class="map-container">
+          <!-- Map Layer Controls -->
+          <div class="map-controls glass-panel">
+            <div class="control-title">MAP LAYERS</div>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layer-topo" checked />
+              <span class="toggle-track"></span>
+              <span>Topography</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layer-sites" checked />
+              <span class="toggle-track"></span>
+              <span>Landing Sites</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layer-regions" checked />
+              <span class="toggle-track"></span>
+              <span>Regions of Interest</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layer-route" />
+              <span class="toggle-track"></span>
+              <span>Planned Route</span>
+            </label>
+            <div class="control-divider"></div>
+            <button class="ctrl-btn" id="btn-plan-route">📍 Add Waypoint</button>
+            <button class="ctrl-btn danger" id="btn-clear-route">🗑 Clear Route</button>
+          </div>
+
+          <!-- The actual map -->
+          <div id="mars-map"></div>
+
+          <!-- Map Legend -->
+          <div class="map-legend glass-panel">
+            <div class="legend-title">LEGEND</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ff6b35"></span> Curiosity</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#4fc3f7"></span> Perseverance</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ce93d8"></span> InSight</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#a5d6a7"></span> Historical</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ffe082"></span> Region of Interest</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ff4444"></span> Waypoint</div>
+          </div>
+
+          <!-- Route Stats -->
+          <div class="route-stats glass-panel hidden" id="route-stats">
+            <div class="stat-title">ROUTE ANALYSIS</div>
+            <div class="stat-item">
+              <span class="stat-label">Total Distance</span>
+              <span class="stat-val" id="route-distance">0.0 km</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Est. EVA Duration</span>
+              <span class="stat-val" id="route-duration">0h 0m</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Waypoints</span>
+              <span class="stat-val" id="route-waypoints">0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL: Weather -->
+      <section class="panel" id="panel-weather">
+        <div class="panel-inner">
+          <div class="weather-header">
+            <div class="weather-hero glass-panel">
+              <div class="weather-main">
+                <div class="weather-location">
+                  <span class="wl-icon">📡</span>
+                  <div>
+                    <div class="wl-name">InSight Lander</div>
+                    <div class="wl-loc">Elysium Planitia, Mars</div>
+                  </div>
+                </div>
+                <div class="weather-temp-big" id="weather-temp-big">—°C</div>
+                <div class="weather-condition" id="weather-condition">Loading atmospheric data...</div>
+              </div>
+              <div class="weather-stats-row">
+                <div class="weather-stat">
+                  <div class="ws-icon">🌡️</div>
+                  <div class="ws-label">Min Temp</div>
+                  <div class="ws-val" id="w-temp-min">—</div>
+                </div>
+                <div class="weather-stat">
+                  <div class="ws-icon">🌡️</div>
+                  <div class="ws-label">Max Temp</div>
+                  <div class="ws-val" id="w-temp-max">—</div>
+                </div>
+                <div class="weather-stat">
+                  <div class="ws-icon">💨</div>
+                  <div class="ws-label">Wind Speed</div>
+                  <div class="ws-val" id="w-wind-avg">—</div>
+                </div>
+                <div class="weather-stat">
+                  <div class="ws-icon">🔵</div>
+                  <div class="ws-label">Pressure</div>
+                  <div class="ws-val" id="w-pressure">—</div>
+                </div>
+                <div class="weather-stat">
+                  <div class="ws-icon">🌸</div>
+                  <div class="ws-label">Season</div>
+                  <div class="ws-val" id="w-season">—</div>
+                </div>
+                <div class="weather-stat">
+                  <div class="ws-icon">☀️</div>
+                  <div class="ws-label">Radiation</div>
+                  <div class="ws-val" id="w-radiation">High</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="weather-grid">
+            <!-- Sol History -->
+            <div class="glass-panel weather-history">
+              <div class="panel-section-title">📅 SOL HISTORY (Last 7 Martian Days)</div>
+              <div class="sol-history" id="sol-history">
+                <div class="loading-spinner"></div>
+              </div>
+            </div>
+
+            <!-- Wind Rose -->
+            <div class="glass-panel wind-rose-panel">
+              <div class="panel-section-title">💨 WIND ROSE</div>
+              <canvas id="wind-rose-canvas" width="220" height="220"></canvas>
+            </div>
+
+            <!-- EVA Advisory -->
+            <div class="glass-panel eva-advisory">
+              <div class="panel-section-title">🧑‍🚀 EVA ADVISORY</div>
+              <div class="eva-items" id="eva-advisory-list">
+                <div class="eva-item safe">
+                  <span class="eva-status-dot"></span>
+                  <span>Temperature: Acceptable for EVA</span>
+                </div>
+                <div class="eva-item warning">
+                  <span class="eva-status-dot"></span>
+                  <span>Wind: Monitor dust storm potential</span>
+                </div>
+                <div class="eva-item safe">
+                  <span class="eva-status-dot"></span>
+                  <span>Pressure: Within suit tolerance</span>
+                </div>
+                <div class="eva-item danger">
+                  <span class="eva-status-dot"></span>
+                  <span>Radiation: High — limit exposure to 4h</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL: Rover Gallery -->
+      <section class="panel" id="panel-gallery">
+        <div class="panel-inner">
+          <div class="gallery-controls glass-panel">
+            <div class="gctrl-group">
+              <label>ROVER</label>
+              <select id="rover-select">
+                <option value="curiosity">Curiosity</option>
+                <option value="perseverance">Perseverance</option>
+                <option value="opportunity">Opportunity</option>
+                <option value="spirit">Spirit</option>
+              </select>
+            </div>
+            <div class="gctrl-group">
+              <label>SOL</label>
+              <input type="number" id="sol-input" value="1000" min="1" max="4500" placeholder="Sol..." />
+            </div>
+            <div class="gctrl-group">
+              <label>CAMERA</label>
+              <select id="camera-select">
+                <option value="ALL">All Cameras</option>
+                <option value="FHAZ">Front Hazard (FHAZ)</option>
+                <option value="RHAZ">Rear Hazard (RHAZ)</option>
+                <option value="NAVCAM">Navigation (NAVCAM)</option>
+                <option value="MAST">Mast Camera (MAST)</option>
+                <option value="CHEMCAM">ChemCam</option>
+                <option value="MAHLI">MAHLI</option>
+              </select>
+            </div>
+            <button class="fetch-btn" id="fetch-photos-btn">🔭 FETCH PHOTOS</button>
+            <button class="fetch-btn secondary" id="fetch-latest-btn">⚡ LATEST SHOTS</button>
+          </div>
+
+          <div class="gallery-meta" id="gallery-meta">
+            <span class="meta-rover" id="meta-rover-name">—</span>
+            <span class="meta-sep">|</span>
+            <span>Sol <span id="meta-sol">—</span></span>
+            <span class="meta-sep">|</span>
+            <span><span id="meta-count">—</span> photos found</span>
+          </div>
+
+          <div class="photo-grid" id="photo-grid">
+            <div class="gallery-placeholder">
+              <div class="gp-icon">📷</div>
+              <div class="gp-text">Select a rover and sol, then click <strong>FETCH PHOTOS</strong></div>
+              <div class="gp-sub">Or click LATEST SHOTS for the most recent images</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL: Mission Planner -->
+      <section class="panel" id="panel-mission">
+        <div class="panel-inner">
+          <div class="mission-grid">
+            <div class="glass-panel mission-info">
+              <div class="panel-section-title">🚀 MISSION OVERVIEW</div>
+              <div class="mission-stats">
+                <div class="ms-item">
+                  <span class="ms-label">Active Rovers</span>
+                  <span class="ms-val">2</span>
+                </div>
+                <div class="ms-item">
+                  <span class="ms-label">Total Photos Taken</span>
+                  <span class="ms-val" id="total-photos-stat">Loading...</span>
+                </div>
+                <div class="ms-item">
+                  <span class="ms-label">Curiosity Sol</span>
+                  <span class="ms-val" id="curiosity-sol-stat">—</span>
+                </div>
+                <div class="ms-item">
+                  <span class="ms-label">Perseverance Sol</span>
+                  <span class="ms-val" id="perseverance-sol-stat">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-panel mission-rovers">
+              <div class="panel-section-title">🤖 ACTIVE MISSIONS</div>
+              <div class="rover-cards" id="rover-cards">
+                <div class="rover-card" data-rover="curiosity">
+                  <div class="rc-header" style="border-left: 4px solid #ff6b35;">
+                    <div class="rc-icon">🚗</div>
+                    <div class="rc-info">
+                      <div class="rc-name">Curiosity</div>
+                      <div class="rc-loc">Gale Crater</div>
+                    </div>
+                    <div class="rc-status active">ACTIVE</div>
+                  </div>
+                  <div class="rc-stats">
+                    <div class="rcs-item"><span>Mission:</span><span>Mars Science Lab</span></div>
+                    <div class="rcs-item"><span>Landing:</span><span>Aug 6, 2012</span></div>
+                    <div class="rcs-item"><span>Max Sol:</span><span id="curiosity-max-sol">Loading...</span></div>
+                    <div class="rcs-item"><span>Total Photos:</span><span id="curiosity-total-photos">Loading...</span></div>
+                  </div>
+                  <button class="rc-btn" onclick="loadRoverManifest('curiosity')">View Manifest</button>
+                </div>
+
+                <div class="rover-card" data-rover="perseverance">
+                  <div class="rc-header" style="border-left: 4px solid #4fc3f7;">
+                    <div class="rc-icon">🤖</div>
+                    <div class="rc-info">
+                      <div class="rc-name">Perseverance</div>
+                      <div class="rc-loc">Jezero Crater</div>
+                    </div>
+                    <div class="rc-status active">ACTIVE</div>
+                  </div>
+                  <div class="rc-stats">
+                    <div class="rcs-item"><span>Mission:</span><span>Mars 2020</span></div>
+                    <div class="rcs-item"><span>Landing:</span><span>Feb 18, 2021</span></div>
+                    <div class="rcs-item"><span>Max Sol:</span><span id="perseverance-max-sol">Loading...</span></div>
+                    <div class="rcs-item"><span>Total Photos:</span><span id="perseverance-total-photos">Loading...</span></div>
+                  </div>
+                  <button class="rc-btn" onclick="loadRoverManifest('perseverance')">View Manifest</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-panel mission-waypoints">
+              <div class="panel-section-title">📍 PLANNED ROUTE WAYPOINTS</div>
+              <div class="waypoint-list" id="waypoint-list">
+                <div class="wp-empty">No waypoints added. Use the Surface Map panel to add waypoints by enabling route mode and clicking on the map.</div>
+              </div>
+              <div class="wp-actions">
+                <button class="ctrl-btn" id="btn-export-route">📤 Export Route</button>
+                <button class="ctrl-btn danger" id="btn-clear-all-wp">🗑 Clear All</button>
+              </div>
+            </div>
+
+            <div class="glass-panel mission-science">
+              <div class="panel-section-title">🔬 SCIENCE OBJECTIVES</div>
+              <div class="science-checklist" id="science-checklist">
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-1" /> Collect rock core sample
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-2" /> Photograph strata layers
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-3" /> Deploy weather sensor
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-4" checked /> Analyze soil composition
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-5" /> Search for biosignatures
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-6" /> Map subsurface radar
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-7" /> Test oxygen production
+                </label>
+                <label class="sci-item">
+                  <input type="checkbox" id="sci-8" /> Collect atmospheric sample
+                </label>
+              </div>
+              <div class="sci-progress">
+                <div class="sci-prog-bar"><div class="sci-prog-fill" id="sci-prog-fill"></div></div>
+                <span id="sci-prog-text">1/8 objectives</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL: APOD -->
+      <section class="panel" id="panel-apod">
+        <div class="panel-inner">
+          <div class="apod-container">
+            <div class="apod-controls glass-panel">
+              <div class="gctrl-group">
+                <label>DATE</label>
+                <input type="date" id="apod-date" />
+              </div>
+              <button class="fetch-btn" id="fetch-apod-btn">🌌 FETCH IMAGE</button>
+              <button class="fetch-btn secondary" id="fetch-apod-random">🎲 RANDOM</button>
+            </div>
+            <div class="apod-display" id="apod-display">
+              <div class="gallery-placeholder">
+                <div class="gp-icon">🌌</div>
+                <div class="gp-text">NASA Astronomy Picture of the Day</div>
+                <div class="gp-sub">Select a date or click RANDOM to explore the cosmos</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL: Telemetry -->
+      <section class="panel" id="panel-telemetry">
+        <div class="panel-inner">
+          <div class="telemetry-grid">
+            <div class="glass-panel telem-chart-panel">
+              <div class="panel-section-title">🌡️ TEMPERATURE HISTORY (°C)</div>
+              <canvas id="temp-chart" height="120"></canvas>
+            </div>
+            <div class="glass-panel telem-chart-panel">
+              <div class="panel-section-title">🔵 ATMOSPHERIC PRESSURE (Pa)</div>
+              <canvas id="pressure-chart" height="120"></canvas>
+            </div>
+            <div class="glass-panel telem-chart-panel">
+              <div class="panel-section-title">💨 WIND SPEED (m/s)</div>
+              <canvas id="wind-chart" height="120"></canvas>
+            </div>
+            <div class="glass-panel telem-summary">
+              <div class="panel-section-title">📋 ENVIRONMENT SUMMARY</div>
+              <div class="telem-facts">
+                <div class="tf-item">
+                  <span class="tf-label">Mars Day (Sol)</span>
+                  <span class="tf-val">24h 37m 22s</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Gravity</span>
+                  <span class="tf-val">3.72 m/s²</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Atmosphere</span>
+                  <span class="tf-val">95% CO₂</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Atm. Pressure</span>
+                  <span class="tf-val">~700 Pa</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Surface Temp</span>
+                  <span class="tf-val">-153 to 20°C</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Year Length</span>
+                  <span class="tf-val">687 Earth days</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Distance from Sun</span>
+                  <span class="tf-val">228M km avg</span>
+                </div>
+                <div class="tf-item">
+                  <span class="tf-label">Moons</span>
+                  <span class="tf-val">Phobos & Deimos</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Photo Lightbox -->
+  <div class="lightbox hidden" id="lightbox">
+    <button class="lightbox-close" id="lightbox-close">✕</button>
+    <div class="lightbox-content">
+      <img src="" alt="Mars Photo" id="lightbox-img" />
+      <div class="lightbox-info" id="lightbox-info"></div>
+    </div>
+  </div>
+
+  <!-- Rover Manifest Modal -->
+  <div class="modal-overlay hidden" id="manifest-modal">
+    <div class="modal glass-panel">
+      <button class="modal-close" id="manifest-modal-close">✕</button>
+      <div class="modal-title" id="manifest-modal-title">Rover Manifest</div>
+      <div class="modal-content" id="manifest-modal-content">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Main JS -->
+  <script src="app.js"></script>
+</body>
+</html>
